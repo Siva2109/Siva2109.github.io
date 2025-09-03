@@ -1,0 +1,71 @@
+<addons>
+
+<!-- TamilDhool -->
+<addon id="plugin.video.tamildhool" version="1.1" name="TamilDhool" provider-name="StayCoolFelix">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+    </requires>
+    <extension point="xbmc.python.pluginsource" library="default.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary>TamilDhool Shows</summary>
+        <description>Stream TamilDhool shows and episodes</description>
+        <platform>all</platform>
+        <author>StayCoolFelix</author>
+        <icon>icon.png</icon>
+    </extension>
+</addon>
+
+<!-- TamilBulb -->
+<addon id="plugin.video.tamilbulb" version="1.0" name="TamilBulb" provider-name="StayCoolFelix">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+    </requires>
+    <extension point="xbmc.python.pluginsource" library="default.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary>TamilBulb Shows</summary>
+        <description>Stream TamilBulb shows and episodes</description>
+        <platform>all</platform>
+        <author>StayCoolFelix</author>
+        <icon>icon.png</icon>
+    </extension>
+</addon>
+
+<!-- Tamilyogi -->
+<addon id="plugin.video.tamilyogi" version="1.0.0" name="Tamilyogi" provider-name="StayCoolFelix">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+    </requires>
+    <extension point="xbmc.python.pluginsource" library="default.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary>Tamilyogi Movies</summary>
+        <description>Stream Tamilyogi movies</description>
+        <platform>all</platform>
+        <author>StayCoolFelix</author>
+        <icon>icon.png</icon>
+    </extension>
+</addon>
+
+<!-- TamilGun -->
+<addon id="plugin.video.tamilgun" version="1.0.0" name="TamilGun" provider-name="StayCoolFelix">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+    </requires>
+    <extension point="xbmc.python.pluginsource" library="default.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary>TamilGun Movies</summary>
+        <description>Stream TamilGun movies</description>
+        <platform>all</platform>
+        <author>StayCoolFelix</author>
+        <icon>icon.png</icon>
+    </extension>
+</addon>
+
+</addons>
