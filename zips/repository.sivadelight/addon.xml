@@ -2,9 +2,9 @@
 <addon id="repository.sivadelight" name="SivaDelight Repository" version="1.0.0" provider-name="Siva">
     <extension point="xbmc.addon.repository" name="SivaDelight Repository">
         <dir>
-            <info compressed="false">https://staycool21.github.io/repo/zips/addons.xml</info>
-            <checksum>https://staycool21.github.io/repo/zips/addons.xml.md5</checksum>
-            <datadir zip="true">https://staycool21.github.io/repo/zips/</datadir>
+            <info compressed="false">https://siva2109.github.io/zips/addons.xml</info>
+            <checksum>https://siva2109.github.io/zips/addons.xml.md5</checksum>
+            <datadir zip="true">https://siva2109.github.io/zips/</datadir>
         </dir>
     </extension>
     <extension point="xbmc.addon.metadata">
