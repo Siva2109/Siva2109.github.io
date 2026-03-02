@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="plugin.video.sivadelight" name="SivaDelight" version="1.0.0" provider-name="Siva">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="script.module.requests" version="2.25.1"/>
+        <import addon="script.module.beautifulsoup4" version="4.9.3"/>
+        <import addon="script.module.resolveurl" version="5.1.0"/>
+    </requires>
+    <extension point="xbmc.python.pluginsource" library="main.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="en">SivaDelight: Latest Indian Movies</summary>
+        <description lang="en">Custom fork for updated movie domains.</description>
+        <platform>all</platform>
+    </extension>
+</addon>
+	
