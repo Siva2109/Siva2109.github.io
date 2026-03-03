@@ -4,65 +4,65 @@ import requests
 from bs4 import BeautifulSoup
 import urllib.parse
 
-def routing(params, handle):
+try:
+    import resolveurl
+except ImportError:
+    resolveurl = None
+
+def routing(paramstring, handle): # Matches Deccan Delight's routing(argv[2])
+    params = dict(urllib.parse.parse_qsl(paramstring[1:]))
     mode = params.get('mode')
+    
     if not mode:
-        # POINT DIRECTLY TO THE MOVIE GALLERY
-        add_directory_item(handle, "TamilGun Latest Movies", "https://tamilgun.now/movies.html", "list")
-        add_directory_item(handle, "TamilBulb Movies", "https://tamilbulb.cc/", "list")
+        # Main Menu
+        add_directory_item(handle, "TamilGun Movies", "https://tamilgun.now/movies.html", "list", True)
         xbmcplugin.endOfDirectory(handle)
+    
     elif mode == 'list':
         scrape_movies(params['url'], handle)
+        
+    elif mode == 'play':
+        play_movie(params['url'], handle)
 
 def scrape_movies(url, handle):
-    session = requests.Session()
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Referer': 'https://tamilgun.now/'
-    }
-    
+    headers = {'User-Agent': 'Mozilla/5.0'}
     try:
-        r = session.get(url, headers=headers, timeout=15, verify=False)
-        r.encoding = 'utf-8'
+        r = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(r.text, 'html.parser')
-        
-        # UNIVERSAL SEARCH: Look for all links (<a>) that contain an image (<img>)
-        # This bypasses the need for specific class names like 'post'
-        items = soup.find_all('a')
-        
-        found_count = 0
-        for item in items:
+        # Look for all links that have movie posters
+        for item in soup.find_all('a'):
             img = item.find('img')
-            # Check if this link looks like a movie entry
-            if img and item.get('href') and ('/video/' in item.get('href') or 'tamilgun' in item.get('href')):
-                title = img.get('alt') or item.get('title') or "Untitled Movie"
-                # Skip tiny buttons or icons
-                if len(title) < 5: continue
+            if img and item.get('href') and '/video/' in item.get('href'):
+                title = img.get('alt') or "Movie"
+                movie_link = item.get('href')
+                thumb = img.get('src')
                 
-                movie_url = item.get('href')
-                poster = img.get('src') or img.get('data-src')
-
-                # Fix relative URLs
-                if movie_url.startswith('/'): movie_url = 'https://tamilgun.now' + movie_url
-                if poster and poster.startswith('//'): poster = 'https:' + poster
-
-                found_count += 1
-                list_item = xbmcgui.ListItem(label=title)
-                list_item.setArt({'thumb': poster, 'poster': poster, 'icon': poster})
-                list_item.setInfo('video', {'title': title})
-                
-                xbmcplugin.addDirectoryItem(handle=handle, url=movie_url, listitem=list_item, isFolder=True)
-        
-        if found_count == 0:
-            xbmcgui.Dialog().ok("SivaDelight", "No items found. The site layout might have changed.")
-
-    except Exception as e:
-        xbmcgui.Dialog().ok("SivaDelight Error", str(e))
-    
+                # We set isFolder=False so it tries to PLAY when clicked
+                add_directory_item(handle, title, movie_link, "play", False, thumb)
+    except:
+        pass
     xbmcplugin.endOfDirectory(handle)
 
-def add_directory_item(handle, name, url, mode):
+def play_movie(url, handle):
+    if not resolveurl:
+        xbmcgui.Dialog().ok("SivaDelight", "Please install ResolveURL dependency.")
+        return
+
+    # This is the "Magic" from Deccan Delight: resolving the link
+    hmf = resolveurl.HostedMediaFile(url=url)
+    if hmf:
+        video_url = hmf.resolve()
+        listitem = xbmcgui.ListItem(path=video_url)
+        xbmcplugin.setResolvedUrl(handle, True, listitem)
+    else:
+        xbmcgui.Dialog().notification("SivaDelight", "Could not find a playable stream.")
+
+def add_directory_item(handle, name, url, mode, isFolder, thumb=None):
     list_item = xbmcgui.ListItem(label=name)
+    if thumb:
+        list_item.setArt({'thumb': thumb, 'poster': thumb})
+    list_item.setProperty('IsPlayable', 'true') if not isFolder else None
+    
     query = urllib.parse.urlencode({'mode': mode, 'url': url})
     u = f"plugin://plugin.video.sivadelight/?{query}"
-    xbmcplugin.addDirectoryItem(handle=handle, url=u, listitem=list_item, isFolder=True)
+    xbmcplugin.addDirectoryItem(handle=handle, url=u, listitem=list_item, isFolder=isFolder)
