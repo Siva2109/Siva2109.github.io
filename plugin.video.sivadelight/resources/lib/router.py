@@ -1,68 +1,65 @@
 import sys
-import re
-import requests
 import xbmcgui
 import xbmcplugin
-import xbmcaddon
-import resolveurl
+import requests
+from bs4 import BeautifulSoup
+import urllib.parse
 
-BASE_URL = "https://tamilgun.now" # Update this if the site changes domain
+# Setup global variables from sys.argv
 HANDLE = int(sys.argv[1])
+BASE_URL = sys.argv[0]
 
-def get_html(url):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-    return requests.get(url, headers=headers).text
-
-def routing(query):
-    # Default view: List Latest Movies
-    if not query:
-        list_movies(BASE_URL + "/movies.html")
+def routing(paramstring):
+    params = dict(urllib.parse.parse_qsl(paramstring[1:])) if paramstring else {}
+    mode = params.get('mode')
     
-    # If a movie is clicked, the query will look like "?action=play&url=..."
-    elif "action=play" in query:
-        params = dict(re.findall(r'(\w+)=([^&]+)', query))
-        play_movie(params['url'])
+    if not mode:
+        # Initial Menu
+        add_directory_item("TamilGun Latest", "https://tamilgun.now/movies.html", "list", True)
+        xbmcplugin.endOfDirectory(HANDLE)
+    elif mode == 'list':
+        scrape_movies(params['url'])
 
-def list_movies(url):
-    html = get_html(url)
-    # This Regex targets the common thumbnail pattern on TamilGun
-    # It looks for the movie link, title, and image within the main grid
-    pattern = r'<div class="thumb">.*?<a href="(.*?)".*?title="(.*?)".*?<img src="(.*?)"'
-    movies = re.findall(pattern, html, re.DOTALL)
-
-    for link, title, img in movies:
-        list_item = xbmcgui.ListItem(label=title)
-        list_item.setArt({'thumb': img, 'icon': img})
-        list_item.setInfo('video', {'title': title})
-        list_item.setProperty('IsPlayable', 'true')
+def scrape_movies(url):
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    try:
+        r = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(r.text, 'html.parser')
         
-        # Route the click back to our play function
-        path = f"{sys.argv[0]}?action=play&url={link}"
-        xbmcplugin.addDirectoryItem(HANDLE, path, list_item, isFolder=False)
+        # This targets the "Latest Videos" grid items from your screenshot
+        # In the current TamilGun layout, these are often in 'div' tags with classes like 'post-column'
+        items = soup.find_all('div', class_=lambda x: x and 'post' in x)
+        
+        found = False
+        for item in items:
+            link_tag = item.find('a')
+            img_tag = item.find('img')
+            
+            if link_tag and img_tag:
+                title = img_tag.get('alt') or link_tag.get('title')
+                movie_url = link_tag.get('href')
+                thumb = img_tag.get('src') or img_tag.get('data-src')
+                
+                if movie_url and title:
+                    # Clean up the thumb URL
+                    if thumb and thumb.startswith('//'): thumb = 'https:' + thumb
+                    
+                    add_directory_item(title, movie_url, "play", False, thumb)
+                    found = True
+        
+        if not found:
+            xbmcgui.Dialog().notification("SivaDelight", "No movies found. Site layout may have changed.")
+
+    except Exception as e:
+        xbmcgui.Dialog().ok("Error", str(e))
     
     xbmcplugin.endOfDirectory(HANDLE)
 
-def play_movie(url):
-    xbmcgui.Dialog().notification("Deccan logic", "Extracting stream...", xbmcgui.NOTIFICATION_INFO, 2000)
-    html = get_html(url)
+def add_directory_item(name, url, mode, isFolder, thumb=None):
+    list_item = xbmcgui.ListItem(label=name)
+    if thumb:
+        list_item.setArt({'thumb': thumb, 'poster': thumb, 'icon': thumb})
     
-    # TamilGun uses iframes or buttons for hosts like 'streamwire', 'videobin', etc.
-    # We need to find the link to the actual video hoster.
-    video_links = re.findall(r'href="(https?://(?:streamwire|mixdrop|dood|voe)\.[a-z0-9/._-]+)"', html)
-    
-    if not video_links:
-        # Fallback: check for iframe players if direct buttons aren't found
-        video_links = re.findall(r'iframe.*?src="(.*?)"', html)
-
-    stream_url = ""
-    for v_url in video_links:
-        if resolveurl.HostedMediaFile(v_url).valid_url():
-            stream_url = resolveurl.resolve(v_url)
-            if stream_url:
-                break
-
-    if stream_url:
-        list_item = xbmcgui.ListItem(path=stream_url)
-        xbmcplugin.setResolvedUrl(HANDLE, True, list_item)
-    else:
-        xbmcgui.Dialog().ok("Error", "No playable stream found on this page.")
+    query = urllib.parse.urlencode({'mode': mode, 'url': url})
+    u = f"{BASE_URL}?{query}"
+    xbmcplugin.addDirectoryItem(handle=HANDLE, url=u, listitem=list_item, isFolder=isFolder)
