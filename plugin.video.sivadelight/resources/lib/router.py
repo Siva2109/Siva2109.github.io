@@ -8,8 +8,8 @@ def routing(params, handle):
     mode = params.get('mode')
     
     if not mode:
-        # Main Menu
-        add_directory_item(handle, "TamilGun Movies", "https://tamilgun.now/", "list")
+        # POINT DIRECTLY TO THE MOVIE GALLERY
+        add_directory_item(handle, "TamilGun Latest Movies", "https://tamilgun.now/movies.html", "list")
         add_directory_item(handle, "TamilBulb Movies", "https://tamilbulb.cc/", "list")
         xbmcplugin.endOfDirectory(handle)
     
@@ -17,52 +17,46 @@ def routing(params, handle):
         scrape_movies(params['url'], handle)
 
 def scrape_movies(url, handle):
-    # Create a session to keep cookies (like a real browser)
     session = requests.Session()
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Referer': url
+        'Referer': 'https://tamilgun.now/'
     }
     
     try:
-        # verify=False helps if the site has SSL certificate issues
         r = session.get(url, headers=headers, timeout=15, verify=False)
         r.encoding = 'utf-8'
         soup = BeautifulSoup(r.text, 'html.parser')
         
-        # This looks for any link (a) that contains an image (img)
-        # Most movie sites use this structure for their grids
-        items = soup.find_all('a')
+        # Based on your screenshot, TamilGun uses 'div' with classes like 'post' or 'ml-item'
+        # We search for these specific containers
+        items = soup.find_all('div', class_=['post', 'ml-item', 'v-item'])
         
         found_count = 0
         for item in items:
-            img = item.find('img')
-            movie_url = item.get('href')
+            link_tag = item.find('a')
+            img_tag = item.find('img')
             
-            if img and movie_url and movie_url.startswith('http'):
-                # Try to get the title from multiple places
-                title = img.get('alt') or item.get('title') or img.get('title')
-                
-                if title and len(title) > 3: # Ignore tiny icons/buttons
-                    poster = img.get('data-src') or img.get('src')
-                    
-                    if poster and poster.startswith('//'): 
-                        poster = 'https:' + poster
-                    
+            if link_tag and img_tag:
+                movie_url = link_tag.get('href')
+                # Get the title from the image 'alt' or the text below it
+                title = img_tag.get('alt') or item.find('h3').text.strip() if item.find('h3') else "Movie"
+                poster = img_tag.get('src') or img_tag.get('data-src')
+
+                if movie_url and movie_url.startswith('http'):
                     found_count += 1
                     list_item = xbmcgui.ListItem(label=title)
                     list_item.setArt({'thumb': poster, 'poster': poster, 'icon': poster})
                     list_item.setInfo('video', {'title': title})
                     
-                    # For now, we keep isFolder=True to see if the content populates
+                    # Point to the movie page
                     xbmcplugin.addDirectoryItem(handle=handle, url=movie_url, listitem=list_item, isFolder=True)
         
         if found_count == 0:
-            xbmcgui.Dialog().notification("SivaDelight", "No movies found. Check site manually.")
+            xbmcgui.Dialog().notification("SivaDelight", "Gallery Empty - Trying legacy search...")
 
     except Exception as e:
-        xbmcgui.Dialog().ok("SivaDelight Error", f"Connection Failed: {str(e)}")
+        xbmcgui.Dialog().ok("SivaDelight Error", str(e))
     
     xbmcplugin.endOfDirectory(handle)
 
