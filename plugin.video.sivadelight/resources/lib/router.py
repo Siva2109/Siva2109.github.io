@@ -17,54 +17,57 @@ def routing(params, handle):
         scrape_movies(params['url'], handle)
 
 def scrape_movies(url, handle):
-    # These headers are the "Key" to opening the door
+    # Create a session to keep cookies (like a real browser)
+    session = requests.Session()
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Referer': url
     }
     
     try:
-        r = requests.get(url, headers=headers, timeout=15)
+        # verify=False helps if the site has SSL certificate issues
+        r = session.get(url, headers=headers, timeout=15, verify=False)
         r.encoding = 'utf-8'
         soup = BeautifulSoup(r.text, 'html.parser')
         
-        # We look for ANY link that contains an image - this is a "catch-all"
-        # specifically designed for Tamil sites that change their tags often.
+        # This looks for any link (a) that contains an image (img)
+        # Most movie sites use this structure for their grids
         items = soup.find_all('a')
         
-        found = False
+        found_count = 0
         for item in items:
             img = item.find('img')
-            # We only want links that have an image (posters) and a title
-            if img and (img.get('alt') or item.get('title')):
-                title = img.get('alt') or item.get('title')
-                movie_url = item.get('href')
-                poster = img.get('data-src') or img.get('src')
+            movie_url = item.get('href')
+            
+            if img and movie_url and movie_url.startswith('http'):
+                # Try to get the title from multiple places
+                title = img.get('alt') or item.get('title') or img.get('title')
                 
-                # Fix relative links
-                if movie_url.startswith('/'): movie_url = url + movie_url
-                if poster and poster.startswith('//'): poster = 'https:' + poster
-                
-                if 'http' in movie_url:
-                    found = True
+                if title and len(title) > 3: # Ignore tiny icons/buttons
+                    poster = img.get('data-src') or img.get('src')
+                    
+                    if poster and poster.startswith('//'): 
+                        poster = 'https:' + poster
+                    
+                    found_count += 1
                     list_item = xbmcgui.ListItem(label=title)
-                    list_item.setArt({'thumb': poster, 'poster': poster})
+                    list_item.setArt({'thumb': poster, 'poster': poster, 'icon': poster})
                     list_item.setInfo('video', {'title': title})
                     
-                    # We will add playback in the next step once we see movies
+                    # For now, we keep isFolder=True to see if the content populates
                     xbmcplugin.addDirectoryItem(handle=handle, url=movie_url, listitem=list_item, isFolder=True)
         
-        if not found:
-            xbmcgui.Dialog().notification("SivaDelight", "No movies found on this page")
+        if found_count == 0:
+            xbmcgui.Dialog().notification("SivaDelight", "No movies found. Check site manually.")
 
     except Exception as e:
-        xbmcgui.Dialog().ok("SivaDelight Error", str(e))
+        xbmcgui.Dialog().ok("SivaDelight Error", f"Connection Failed: {str(e)}")
     
     xbmcplugin.endOfDirectory(handle)
 
 def add_directory_item(handle, name, url, mode):
     list_item = xbmcgui.ListItem(label=name)
     query = urllib.parse.urlencode({'mode': mode, 'url': url})
-    # This URL format is exactly how Deccan Delight does it
     u = f"plugin://plugin.video.sivadelight/?{query}"
     xbmcplugin.addDirectoryItem(handle=handle, url=u, listitem=list_item, isFolder=True)
