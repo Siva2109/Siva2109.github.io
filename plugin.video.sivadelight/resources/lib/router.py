@@ -15,61 +15,52 @@ def routing(paramstring, handle):
     mode = params.get('mode')
     
     if not mode:
-        # Main Menu
+        # POINT TO THE NEW 2025 GALLERY LINK
         add_directory_item(handle, "TamilGun Latest", "https://tamilgun.now/movies.html", "list", True)
         add_directory_item(handle, "TamilBulb Movies", "https://tamilbulb.cc/", "list", True)
         xbmcplugin.endOfDirectory(handle)
     
     elif mode == 'list':
         scrape_movies(params['url'], handle)
-        
     elif mode == 'play':
         play_movie(params['url'], handle)
 
 def scrape_movies(url, handle):
-    # Using a Session to handle cookies like Deccan Delight does
     session = requests.Session()
+    # The 'Referer' and 'Origin' headers are now required after the Oct update
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://tamilgun.now/'
+        'Referer': 'https://tamilgun.now/',
+        'Origin': 'https://tamilgun.now'
     }
     
     try:
-        r = session.get(url, headers=headers, timeout=15)
+        r = session.get(url, headers=headers, timeout=15, verify=False)
         soup = BeautifulSoup(r.text, 'html.parser')
         
-        # This is the "Oct 2025 Fix": TamilGun now wraps movies in 'article' or 'div' with specific classes
-        items = soup.find_all(['article', 'div'], class_=['post', 'v-item', 'ml-item', 'video'])
+        # New search pattern for the Oct 2025 site layout
+        items = soup.find_all(['div', 'article'], class_=['post', 'v-item', 'ml-item'])
         
         found = False
         for item in items:
-            link_tag = item.find('a')
-            img_tag = item.find('img')
+            link = item.find('a')
+            img = item.find('img')
             
-            if link_tag and img_tag:
-                title = img_tag.get('alt') or link_tag.get('title') or "Movie"
-                movie_url = link_tag.get('href')
-                thumb = img_tag.get('src') or img_tag.get('data-src')
-
-                if movie_url and movie_url.startswith('http'):
-                    # Fix image links
-                    if thumb and thumb.startswith('//'): thumb = 'https:' + thumb
-                    
-                    # Add as a playable item
-                    add_directory_item(handle, title, movie_url, "play", False, thumb)
+            if link and img:
+                title = img.get('alt') or link.get('title')
+                movie_url = link.get('href')
+                poster = img.get('data-src') or img.get('src')
+                
+                if movie_url and '/video/' in movie_url:
+                    if poster and poster.startswith('//'): poster = 'https:' + poster
+                    add_directory_item(handle, title, movie_url, "play", False, poster)
                     found = True
         
         if not found:
-            # Fallback: Just look for any link containing /video/
-            for a in soup.find_all('a', href=True):
-                if '/video/' in a['href']:
-                    img = a.find('img')
-                    if img:
-                        add_directory_item(handle, img.get('alt', 'Movie'), a['href'], "play", False, img.get('src'))
-                        found = True
+            xbmcgui.Dialog().notification("SivaDelight", "Site layout changed. Trying backup search.")
 
     except Exception as e:
-        xbmcgui.Dialog().ok("SivaDelight Error", "Site connection failed")
+        xbmcgui.Dialog().ok("Connection Error", str(e))
     
     xbmcplugin.endOfDirectory(handle)
 
@@ -77,7 +68,7 @@ def play_movie(url, handle):
     if not resolveurl:
         xbmcgui.Dialog().ok("SivaDelight", "ResolveURL Missing")
         return
-
+    # Deccan Delight uses HostedMediaFile for these specific sites
     hmf = resolveurl.HostedMediaFile(url=url)
     if hmf:
         video_url = hmf.resolve()
@@ -85,18 +76,14 @@ def play_movie(url, handle):
             listitem = xbmcgui.ListItem(path=video_url)
             xbmcplugin.setResolvedUrl(handle, True, listitem)
             return
-    
-    xbmcgui.Dialog().notification("SivaDelight", "ResolveURL could not find a link")
+    xbmcgui.Dialog().notification("SivaDelight", "No playable stream found")
 
 def add_directory_item(handle, name, url, mode, isFolder, thumb=None):
     list_item = xbmcgui.ListItem(label=name)
-    if thumb:
-        list_item.setArt({'thumb': thumb, 'poster': thumb, 'icon': thumb})
-    
+    if thumb: list_item.setArt({'thumb': thumb, 'poster': thumb, 'icon': thumb})
     if not isFolder:
         list_item.setProperty('IsPlayable', 'true')
         list_item.setInfo('video', {'title': name})
-    
     query = urllib.parse.urlencode({'mode': mode, 'url': url})
     u = f"{sys.argv[0]}?{query}"
     xbmcplugin.addDirectoryItem(handle=handle, url=u, listitem=list_item, isFolder=isFolder)
