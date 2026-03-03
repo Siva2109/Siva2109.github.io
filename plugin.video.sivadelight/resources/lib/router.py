@@ -1,93 +1,68 @@
 import sys
+import re
+import requests
 import xbmcgui
 import xbmcplugin
-import requests
-import re
-import urllib.parse
-from bs4 import BeautifulSoup
+import xbmcaddon
+import resolveurl
 
-try:
-    import resolveurl
-except ImportError:
-    resolveurl = None
-
-# Get the handle and plugin URL globally like Gujal does
+BASE_URL = "https://tamilgun.now" # Update this if the site changes domain
 HANDLE = int(sys.argv[1])
-BASE_URL = sys.argv[0]
 
-def routing(paramstring):
-    params = dict(urllib.parse.parse_qsl(paramstring[1:])) if paramstring else {}
-    mode = params.get('mode')
+def get_html(url):
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    return requests.get(url, headers=headers).text
+
+def routing(query):
+    # Default view: List Latest Movies
+    if not query:
+        list_movies(BASE_URL + "/movies.html")
     
-    if not mode:
-        add_directory_item("TamilGun Latest", "https://tamilgun.now/movies.html", "list", True)
-        add_directory_item("TamilBulb", "https://tamilbulb.cc/", "list", True)
-        xbmcplugin.endOfDirectory(HANDLE)
-    elif mode == 'list':
-        scrape_movies(params['url'])
-    elif mode == 'play':
+    # If a movie is clicked, the query will look like "?action=play&url=..."
+    elif "action=play" in query:
+        params = dict(re.findall(r'(\w+)=([^&]+)', query))
         play_movie(params['url'])
 
-def scrape_movies(url):
-    headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://tamilgun.now/'}
-    try:
-        r = requests.get(url, headers=headers, timeout=15, verify=False)
-        html = r.text
-        
-        # 1. Try BeautifulSoup first (Standard)
-        soup = BeautifulSoup(html, 'html.parser')
-        items = soup.find_all(['div', 'article'], class_=['post', 'v-item', 'ml-item'])
-        
-        found = False
-        for item in items:
-            link = item.find('a')
-            img = item.find('img')
-            if link and img:
-                title = img.get('alt') or link.get('title')
-                m_url = link.get('href')
-                thumb = img.get('data-src') or img.get('src')
-                if m_url and '/video/' in m_url:
-                    add_directory_item(title, m_url, "play", False, thumb)
-                    found = True
+def list_movies(url):
+    html = get_html(url)
+    # This Regex targets the common thumbnail pattern on TamilGun
+    # It looks for the movie link, title, and image within the main grid
+    pattern = r'<div class="thumb">.*?<a href="(.*?)".*?title="(.*?)".*?<img src="(.*?)"'
+    movies = re.findall(pattern, html, re.DOTALL)
 
-        # 2. REGEX FALLBACK (The Gujal Secret)
-        # If BeautifulSoup finds nothing, we search the raw text for video links
-        if not found:
-            # Look for patterns like: href="link" ... src="image"
-            matches = re.findall(r'href="(https://tamilgun.now/video/[^"]+)"[^>]*>.*?src="([^"]+)"', html, re.DOTALL)
-            for m_url, thumb in matches:
-                title = m_url.split('/')[-1].replace('-', ' ').title()
-                add_directory_item(title, m_url, "play", False, thumb)
-                found = True
-
-    except Exception as e:
-        xbmcgui.Dialog().ok("SivaDelight Error", str(e))
+    for link, title, img in movies:
+        list_item = xbmcgui.ListItem(label=title)
+        list_item.setArt({'thumb': img, 'icon': img})
+        list_item.setInfo('video', {'title': title})
+        list_item.setProperty('IsPlayable', 'true')
+        
+        # Route the click back to our play function
+        path = f"{sys.argv[0]}?action=play&url={link}"
+        xbmcplugin.addDirectoryItem(HANDLE, path, list_item, isFolder=False)
     
     xbmcplugin.endOfDirectory(HANDLE)
 
 def play_movie(url):
-    if not resolveurl:
-        xbmcgui.Dialog().ok("SivaDelight", "ResolveURL Missing")
-        return
-    hmf = resolveurl.HostedMediaFile(url=url)
-    if hmf:
-        video_url = hmf.resolve()
-        if video_url:
-            listitem = xbmcgui.ListItem(path=video_url)
-            xbmcplugin.setResolvedUrl(HANDLE, True, listitem)
-            return
-    xbmcgui.Dialog().notification("SivaDelight", "Stream not found")
+    xbmcgui.Dialog().notification("Deccan logic", "Extracting stream...", xbmcgui.NOTIFICATION_INFO, 2000)
+    html = get_html(url)
+    
+    # TamilGun uses iframes or buttons for hosts like 'streamwire', 'videobin', etc.
+    # We need to find the link to the actual video hoster.
+    video_links = re.findall(r'href="(https?://(?:streamwire|mixdrop|dood|voe)\.[a-z0-9/._-]+)"', html)
+    
+    if not video_links:
+        # Fallback: check for iframe players if direct buttons aren't found
+        video_links = re.findall(r'iframe.*?src="(.*?)"', html)
 
-def add_directory_item(name, url, mode, isFolder, thumb=None):
-    list_item = xbmcgui.ListItem(label=name)
-    if thumb:
-        if thumb.startswith('//'): thumb = 'https:' + thumb
-        list_item.setArt({'thumb': thumb, 'poster': thumb, 'icon': thumb})
-    
-    if not isFolder:
-        list_item.setProperty('IsPlayable', 'true')
-        list_item.setInfo('video', {'title': name})
-    
-    query = urllib.parse.urlencode({'mode': mode, 'url': url})
-    u = f"{BASE_URL}?{query}"
-    xbmcplugin.addDirectoryItem(handle=HANDLE, url=u, listitem=list_item, isFolder=isFolder)
+    stream_url = ""
+    for v_url in video_links:
+        if resolveurl.HostedMediaFile(v_url).valid_url():
+            stream_url = resolveurl.resolve(v_url)
+            if stream_url:
+                break
+
+    if stream_url:
+        list_item = xbmcgui.ListItem(path=stream_url)
+        xbmcplugin.setResolvedUrl(HANDLE, True, list_item)
+    else:
+        xbmcgui.Dialog().ok("Error", "No playable stream found on this page.")

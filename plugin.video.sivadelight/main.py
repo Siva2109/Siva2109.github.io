@@ -1,6 +1,5 @@
 import sys
-from resources.lib import router
+from resources.lib.router import routing
 
-# This matches Gujal's Deccan Delight main.py exactly
-if __name__ == '__main__':
-    router.routing(sys.argv[2])
+# Pass the full plugin URL (sys.argv[0]) and the query string (sys.argv[2])
+routing(sys.argv[2])
